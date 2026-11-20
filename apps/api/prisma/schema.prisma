@@ -1,0 +1,207 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  role         String
+  failedLogins Int       @default(0)
+  lockedUntil  DateTime?
+  createdAt    DateTime  @default(now())
+}
+
+model Unit {
+  id        String         @id @default(cuid())
+  name      String         @unique
+  createdAt DateTime       @default(now())
+  contracts Contract[]
+  cas       ContractCa[]
+  templates RuleTemplate[]
+}
+
+model Place {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  createdAt DateTime   @default(now())
+  contracts Contract[]
+}
+
+model Firm {
+  id        String     @id @default(cuid())
+  name      String     @unique
+  createdAt DateTime   @default(now())
+  contracts Contract[]
+}
+
+model ContractType {
+  id        String         @id @default(cuid())
+  name      String         @unique
+  createdAt DateTime       @default(now())
+  contracts Contract[]
+  templates RuleTemplate[]
+}
+
+model Subcontractor {
+  id              String         @id @default(cuid())
+  name            String
+  phone           String
+  whatsapp        String?
+  pinHash         String
+  defaultSharePct String
+  payoutNote      String?
+  createdAt       DateTime       @default(now())
+  contracts       Contract[]
+  payments        Payment[]
+  ledger          LedgerEntry[]
+}
+
+model RuleTemplate {
+  id             String                @id @default(cuid())
+  name           String
+  unitId         String
+  unit           Unit                  @relation(fields: [unitId], references: [id])
+  contractTypeId String
+  contractType   ContractType          @relation(fields: [contractTypeId], references: [id])
+  status         String                @default("ACTIVE")
+  createdAt      DateTime              @default(now())
+  versions       RuleTemplateVersion[]
+}
+
+model RuleTemplateVersion {
+  id            String       @id @default(cuid())
+  templateId    String
+  template      RuleTemplate @relation(fields: [templateId], references: [id])
+  version       Int
+  effectiveFrom DateTime     @default(now())
+  createdById   String
+  items         RuleItem[]
+  contracts     Contract[]
+
+  @@unique([templateId, version])
+}
+
+model RuleItem {
+  id            String              @id @default(cuid())
+  versionId     String
+  version       RuleTemplateVersion @relation(fields: [versionId], references: [id], onDelete: Cascade)
+  name          String
+  kind          String
+  value         String
+  basis         String
+  reducesCheque Boolean             @default(false)
+  sort          Int
+}
+
+model Contract {
+  id                String                 @id @default(cuid())
+  contractNo        String
+  unitId            String
+  unit              Unit                   @relation(fields: [unitId], references: [id])
+  placeId           String
+  place             Place                  @relation(fields: [placeId], references: [id])
+  firmId            String
+  firm              Firm                   @relation(fields: [firmId], references: [id])
+  contractTypeId    String
+  contractType      ContractType           @relation(fields: [contractTypeId], references: [id])
+  subcontractorId   String
+  subcontractor     Subcontractor          @relation(fields: [subcontractorId], references: [id])
+  templateVersionId String
+  templateVersion   RuleTemplateVersion    @relation(fields: [templateVersionId], references: [id])
+  description       String
+  value             String
+  sharePct          String
+  status            String                 @default("DRAFT")
+  chequeAmount      String
+  expectedProfit    String
+  breakdownJson     String
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  cas               ContractCa[]
+  payments          Payment[]
+  overrides         ContractRuleOverride[]
+  ledger            LedgerEntry[]
+}
+
+model ContractCa {
+  id         String   @id @default(cuid())
+  contractId String
+  contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  unitId     String
+  unit       Unit     @relation(fields: [unitId], references: [id])
+  caNumber   String
+
+  @@unique([unitId, caNumber])
+}
+
+model ContractRuleOverride {
+  id         String   @id @default(cuid())
+  contractId String
+  contract   Contract @relation(fields: [contractId], references: [id])
+  ruleItemId String
+  itemName   String
+  oldValue   String
+  newValue   String
+  reason     String
+  userId     String
+  createdAt  DateTime @default(now())
+}
+
+model Payment {
+  id              String                @id @default(cuid())
+  contractId      String
+  contract        Contract              @relation(fields: [contractId], references: [id])
+  subcontractorId String
+  subcontractor   Subcontractor         @relation(fields: [subcontractorId], references: [id])
+  amount          String
+  method          String
+  reference       String?
+  remarks         String?
+  status          String                @default("PENDING_CONFIRMATION")
+  warning         String?
+  createdAt       DateTime              @default(now())
+  confirmation    PaymentConfirmation?
+}
+
+model PaymentConfirmation {
+  id            String    @id @default(cuid())
+  paymentId     String    @unique
+  payment       Payment   @relation(fields: [paymentId], references: [id])
+  tokenHash     String    @unique
+  expiresAt     DateTime
+  verifiedAt    DateTime?
+  decision      String?
+  disputeReason String?
+  attempts      Int       @default(0)
+  createdAt     DateTime  @default(now())
+}
+
+model LedgerEntry {
+  id              String        @id @default(cuid())
+  subcontractorId String
+  subcontractor  Subcontractor @relation(fields: [subcontractorId], references: [id])
+  contractId     String
+  contract       Contract      @relation(fields: [contractId], references: [id])
+  type            String
+  amount          String
+  refId           String?
+  createdAt       DateTime      @default(now())
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  actor     String
+  action    String
+  entity    String
+  entityId  String
+  oldJson   String?
+  newJson   String?
+  createdAt DateTime @default(now())
+}
